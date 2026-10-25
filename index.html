@@ -130,6 +130,18 @@
                             autocomplete="off" disabled />
                         <button id="rag-btn" class="btn-primary" disabled>Ask</button>
                     </div>
+                    <section id="rag-history" class="question-history hidden" aria-label="Recent questions">
+                        <div class="question-history-header">
+                            <div>
+                                <h4>Recent questions</h4>
+                                <p>Saved in this browser for your account. Only question text is stored.</p>
+                            </div>
+                            <button id="clear-rag-history-btn" class="question-history-clear" type="button">
+                                Clear history
+                            </button>
+                        </div>
+                        <ul id="rag-history-list" class="question-history-list"></ul>
+                    </section>
                     <div class="search-results" id="rag-results"></div>
                 </div>
             </div>

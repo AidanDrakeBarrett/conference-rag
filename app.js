@@ -83,6 +83,12 @@ const ragInput = document.getElementById('rag-input');
 const ragBtn = document.getElementById('rag-btn');
 const ragResults = document.getElementById('rag-results');
 const ragStatus = document.getElementById('rag-status');
+const ragHistory = document.getElementById('rag-history');
+const ragHistoryList = document.getElementById('rag-history-list');
+const clearRagHistoryBtn = document.getElementById('clear-rag-history-btn');
+
+const QUESTION_HISTORY_LIMIT = 10;
+let questionHistoryUserId = null;
 
 // ============================================
 // SETUP BANNER DETECTION
@@ -284,6 +290,8 @@ function showApp(user) {
     if (loginScreen) loginScreen.classList.add('hidden');
     if (appScreen) appScreen.classList.remove('hidden');
     if (userEmailSpan) userEmailSpan.textContent = user.email;
+    questionHistoryUserId = user.id;
+    renderQuestionHistory();
     // Check search readiness when user logs in
     checkSearchReadiness();
 }
@@ -541,6 +549,7 @@ async function askQuestion() {
 
         // Step 5: Generate answer with full context
         const answer = await generateAnswer(question, enrichedTalks);
+        rememberQuestion(question);
 
         // Compute overall similarity (weighted avg across source talks)
         const overallSimilarity = topTalks.reduce((sum, t) => sum + t.avgSimilarity, 0) / topTalks.length;
@@ -716,6 +725,95 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// ============================================
+// RECENT QUESTION HISTORY
+// ============================================
+
+function getQuestionHistoryKey() {
+    return questionHistoryUserId
+        ? `conference-rag-question-history:${questionHistoryUserId}`
+        : null;
+}
+
+function readQuestionHistory() {
+    const key = getQuestionHistoryKey();
+    if (!key) return [];
+
+    try {
+        const savedQuestions = JSON.parse(localStorage.getItem(key) || '[]');
+        if (!Array.isArray(savedQuestions)) return [];
+        return savedQuestions
+            .filter(question => typeof question === 'string')
+            .map(question => question.trim())
+            .filter(Boolean)
+            .slice(0, QUESTION_HISTORY_LIMIT);
+    } catch (error) {
+        console.warn('Could not read recent question history:', error.message);
+        return [];
+    }
+}
+
+function writeQuestionHistory(questions) {
+    const key = getQuestionHistoryKey();
+    if (!key) return;
+
+    try {
+        localStorage.setItem(key, JSON.stringify(questions));
+    } catch (error) {
+        console.warn('Could not save recent question history:', error.message);
+    }
+}
+
+function rememberQuestion(question) {
+    const normalizedQuestion = question.trim();
+    if (!normalizedQuestion) return;
+
+    const history = readQuestionHistory();
+    const withoutDuplicate = history.filter(
+        savedQuestion => savedQuestion.toLowerCase() !== normalizedQuestion.toLowerCase()
+    );
+    const updatedHistory = [normalizedQuestion, ...withoutDuplicate].slice(0, QUESTION_HISTORY_LIMIT);
+
+    writeQuestionHistory(updatedHistory);
+    renderQuestionHistory(updatedHistory);
+}
+
+function renderQuestionHistory(questions = readQuestionHistory()) {
+    if (!ragHistory || !ragHistoryList) return;
+
+    ragHistoryList.replaceChildren();
+    ragHistory.classList.toggle('hidden', questions.length === 0);
+
+    for (const question of questions) {
+        const item = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'question-history-item';
+        button.textContent = question;
+        button.title = `Fill question: ${question}`;
+        button.addEventListener('click', () => {
+            if (!ragInput) return;
+            ragInput.value = question;
+            ragInput.focus();
+        });
+
+        item.appendChild(button);
+        ragHistoryList.appendChild(item);
+    }
+}
+
+function clearQuestionHistory() {
+    const key = getQuestionHistoryKey();
+    if (!key) return;
+
+    try {
+        localStorage.removeItem(key);
+    } catch (error) {
+        console.warn('Could not clear recent question history:', error.message);
+    }
+    renderQuestionHistory([]);
+}
+
 // Similarity badge with color coding
 function similarityBadge(similarity) {
     const pct = (similarity * 100).toFixed(0);
@@ -751,6 +849,7 @@ if (ragBtn) ragBtn.addEventListener('click', askQuestion);
 if (ragInput) ragInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') askQuestion();
 });
+if (clearRagHistoryBtn) clearRagHistoryBtn.addEventListener('click', clearQuestionHistory);
 
 // ============================================
 // DEPLOY TIMESTAMP
